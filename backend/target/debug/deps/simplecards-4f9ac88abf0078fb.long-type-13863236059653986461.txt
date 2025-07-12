@@ -1,0 +1,1 @@
+fn(axum::extract::State<connection::Database>, axum::extract::State<JwtService>, axum::Json<JsonValue>) -> impl std::future::Future<Output = Result<impl IntoResponse, AppError>> {refresh_token}

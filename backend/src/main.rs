@@ -1,5 +1,5 @@
 use axum::{
-    routing::{get, post},
+    routing::{get, post, put, delete},
     middleware,
     Router,
     Json,
@@ -83,8 +83,33 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Build protected routes (require authentication)
     let protected_routes = Router::new()
+        // User routes
         .route("/users/me", get(api::users::get_current_user))
         .route("/users/me", post(api::users::update_current_user))
+        
+        // Team routes
+        .route("/teams", post(api::teams::create_team))
+        .route("/teams", get(api::teams::get_user_teams))
+        .route("/teams/:team_id", get(api::teams::get_team_details))
+        .route("/teams/:team_id", put(api::teams::update_team))
+        .route("/teams/:team_id", delete(api::teams::delete_team))
+        .route("/teams/:team_id/members", post(api::teams::add_team_member))
+        .route("/teams/:team_id/members/:user_id", delete(api::teams::remove_team_member))
+        .route("/teams/:team_id/members/:user_id", put(api::teams::update_team_member_role))
+        
+        // Project routes
+        .route("/teams/:team_id/projects", post(api::projects::create_project))
+        .route("/teams/:team_id/projects", get(api::projects::get_team_projects))
+        .route("/projects", get(api::projects::get_user_projects))
+        .route("/projects/:project_id", get(api::projects::get_project_details))
+        .route("/projects/:project_id", put(api::projects::update_project))
+        .route("/projects/:project_id", delete(api::projects::delete_project))
+        .route("/projects/:project_id/archive", post(api::projects::archive_project))
+        .route("/projects/:project_id/activate", post(api::projects::activate_project))
+        .route("/projects/:project_id/members", post(api::projects::add_project_member))
+        .route("/projects/:project_id/members/:user_id", delete(api::projects::remove_project_member))
+        .route("/projects/:project_id/members/:user_id", put(api::projects::update_project_member_role))
+        
         .layer(middleware::from_fn_with_state(
             jwt_service,
             auth::middleware::auth_middleware,
