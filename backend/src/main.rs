@@ -110,6 +110,27 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/projects/:project_id/members/:user_id", delete(api::projects::remove_project_member))
         .route("/projects/:project_id/members/:user_id", put(api::projects::update_project_member_role))
         
+        // Task routes
+        .route("/projects/:project_id/tasks", post(api::tasks::create_task))
+        .route("/projects/:project_id/tasks", get(api::tasks::get_project_tasks))
+        .route("/tasks", get(api::tasks::get_user_assigned_tasks))
+        .route("/tasks/:task_id", get(api::tasks::get_task_details))
+        .route("/tasks/:task_id", put(api::tasks::update_task))
+        .route("/tasks/:task_id", delete(api::tasks::delete_task))
+        .route("/tasks/:task_id/move", post(api::tasks::move_task))
+        
+        // Board routes
+        .route("/projects/:project_id/boards", post(api::boards::create_board))
+        .route("/projects/:project_id/boards", get(api::boards::get_project_boards))
+        .route("/boards/:board_id", get(api::boards::get_board_details))
+        .route("/boards/:board_id", put(api::boards::update_board))
+        .route("/boards/:board_id", delete(api::boards::delete_board))
+        
+        // Task comment routes
+        .route("/tasks/:task_id/comments", post(api::comments::create_task_comment))
+        .route("/tasks/:task_id/comments", get(api::comments::get_task_comments))
+        .route("/comments/:comment_id", delete(api::comments::delete_task_comment))
+        
         .layer(middleware::from_fn_with_state(
             jwt_service,
             auth::middleware::auth_middleware,

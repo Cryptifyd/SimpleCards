@@ -6,7 +6,10 @@ use chrono::{DateTime, Utc};
 use crate::database::models::{
     User, CreateUserRequest, UpdateUserRequest,
     Team, CreateTeamRequest, TeamMember, TeamRole,
-    Project, CreateProjectRequest, ProjectMember, ProjectRole, UserSummary
+    Project, CreateProjectRequest, ProjectMember, ProjectRole, UserSummary,
+    Task, CreateTaskRequest, UpdateTaskRequest, TaskStatus, TaskPriority,
+    Board, CreateBoardRequest, UpdateBoardRequest, MoveTaskRequest,
+    TaskComment, CreateTaskCommentRequest
 };
 use crate::utils::errors::AppError;
 
@@ -785,5 +788,528 @@ impl ProjectQueries {
         .await?;
 
         Ok(row.get::<bool, _>("exists"))
+    }
+}
+
+pub struct TaskQueries;
+
+impl TaskQueries {
+    pub async fn create_task(
+        pool: &PgPool,
+        project_id: Uuid,
+        request: &CreateTaskRequest,
+        created_by: Uuid,
+    ) -> Result<Task, AppError> {
+        // Get the next position for this project
+        let position_row = sqlx::query(
+            "SELECT COALESCE(MAX(position), 0) + 1 as next_position FROM tasks WHERE project_id = $1"
+        )
+        .bind(project_id)
+        .fetch_one(pool)
+        .await?;
+        
+        let position: i32 = position_row.get("next_position");
+        let priority = request.priority.clone().unwrap_or(TaskPriority::Medium);
+
+        let row = sqlx::query(
+            r#"
+            INSERT INTO tasks (title, description, project_id, created_by, assigned_to, priority, due_date, tags, position)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+            RETURNING id, title, description, project_id, created_by, assigned_to, status, priority, due_date, tags, position, created_at, updated_at
+            "#
+        )
+        .bind(&request.title)
+        .bind(&request.description)
+        .bind(project_id)
+        .bind(created_by)
+        .bind(&request.assigned_to)
+        .bind(&priority)
+        .bind(&request.due_date)
+        .bind(serde_json::to_value(&request.tags).unwrap_or(serde_json::Value::Array(vec![])))
+        .bind(position)
+        .fetch_one(pool)
+        .await?;
+
+        Ok(Task {
+            id: row.get("id"),
+            title: row.get("title"),
+            description: row.get("description"),
+            project_id: row.get("project_id"),
+            created_by: row.get("created_by"),
+            assigned_to: row.get("assigned_to"),
+            status: row.get("status"),
+            priority: row.get("priority"),
+            due_date: row.get("due_date"),
+            tags: serde_json::from_value(row.get("tags")).unwrap_or(None),
+            position: row.get("position"),
+            created_at: row.get("created_at"),
+            updated_at: row.get("updated_at"),
+        })
+    }
+
+    pub async fn get_project_tasks(
+        pool: &PgPool,
+        project_id: Uuid,
+    ) -> Result<Vec<Task>, AppError> {
+        let rows = sqlx::query(
+            r#"
+            SELECT id, title, description, project_id, created_by, assigned_to, status, priority, due_date, tags, position, created_at, updated_at
+            FROM tasks 
+            WHERE project_id = $1 
+            ORDER BY position ASC, created_at ASC
+            "#
+        )
+        .bind(project_id)
+        .fetch_all(pool)
+        .await?;
+
+        let tasks = rows.into_iter().map(|row| Task {
+            id: row.get("id"),
+            title: row.get("title"),
+            description: row.get("description"),
+            project_id: row.get("project_id"),
+            created_by: row.get("created_by"),
+            assigned_to: row.get("assigned_to"),
+            status: row.get("status"),
+            priority: row.get("priority"),
+            due_date: row.get("due_date"),
+            tags: serde_json::from_value(row.get("tags")).unwrap_or(None),
+            position: row.get("position"),
+            created_at: row.get("created_at"),
+            updated_at: row.get("updated_at"),
+        }).collect();
+
+        Ok(tasks)
+    }
+
+    pub async fn get_task_by_id(
+        pool: &PgPool,
+        task_id: Uuid,
+    ) -> Result<Task, AppError> {
+        let row = sqlx::query(
+            r#"
+            SELECT id, title, description, project_id, created_by, assigned_to, status, priority, due_date, tags, position, created_at, updated_at
+            FROM tasks 
+            WHERE id = $1
+            "#
+        )
+        .bind(task_id)
+        .fetch_optional(pool)
+        .await?;
+
+        match row {
+            Some(row) => Ok(Task {
+                id: row.get("id"),
+                title: row.get("title"),
+                description: row.get("description"),
+                project_id: row.get("project_id"),
+                created_by: row.get("created_by"),
+                assigned_to: row.get("assigned_to"),
+                status: row.get("status"),
+                priority: row.get("priority"),
+                due_date: row.get("due_date"),
+                tags: serde_json::from_value(row.get("tags")).unwrap_or(None),
+                position: row.get("position"),
+                created_at: row.get("created_at"),
+                updated_at: row.get("updated_at"),
+            }),
+            None => Err(AppError::NotFound("Task not found".to_string())),
+        }
+    }
+
+    pub async fn update_task(
+        pool: &PgPool,
+        task_id: Uuid,
+        request: &UpdateTaskRequest,
+    ) -> Result<Task, AppError> {
+        let row = sqlx::query(
+            r#"
+            UPDATE tasks 
+            SET title = COALESCE($2, title),
+                description = COALESCE($3, description),
+                assigned_to = COALESCE($4, assigned_to),
+                status = COALESCE($5, status),
+                priority = COALESCE($6, priority),
+                due_date = COALESCE($7, due_date),
+                tags = COALESCE($8, tags)
+            WHERE id = $1
+            RETURNING id, title, description, project_id, created_by, assigned_to, status, priority, due_date, tags, position, created_at, updated_at
+            "#
+        )
+        .bind(task_id)
+        .bind(&request.title)
+        .bind(&request.description)
+        .bind(&request.assigned_to)
+        .bind(&request.status)
+        .bind(&request.priority)
+        .bind(&request.due_date)
+        .bind(request.tags.as_ref().map(|tags| serde_json::to_value(tags).unwrap_or(serde_json::Value::Null)))
+        .fetch_optional(pool)
+        .await?;
+
+        match row {
+            Some(row) => Ok(Task {
+                id: row.get("id"),
+                title: row.get("title"),
+                description: row.get("description"),
+                project_id: row.get("project_id"),
+                created_by: row.get("created_by"),
+                assigned_to: row.get("assigned_to"),
+                status: row.get("status"),
+                priority: row.get("priority"),
+                due_date: row.get("due_date"),
+                tags: serde_json::from_value(row.get("tags")).unwrap_or(None),
+                position: row.get("position"),
+                created_at: row.get("created_at"),
+                updated_at: row.get("updated_at"),
+            }),
+            None => Err(AppError::NotFound("Task not found".to_string())),
+        }
+    }
+
+    pub async fn delete_task(
+        pool: &PgPool,
+        task_id: Uuid,
+    ) -> Result<(), AppError> {
+        let result = sqlx::query("DELETE FROM tasks WHERE id = $1")
+            .bind(task_id)
+            .execute(pool)
+            .await?;
+
+        if result.rows_affected() == 0 {
+            return Err(AppError::NotFound("Task not found".to_string()));
+        }
+
+        Ok(())
+    }
+
+    pub async fn move_task(
+        pool: &PgPool,
+        task_id: Uuid,
+        new_status: TaskStatus,
+        new_position: i32,
+    ) -> Result<Task, AppError> {
+        let row = sqlx::query(
+            r#"
+            UPDATE tasks 
+            SET status = $2, position = $3
+            WHERE id = $1
+            RETURNING id, title, description, project_id, created_by, assigned_to, status, priority, due_date, tags, position, created_at, updated_at
+            "#
+        )
+        .bind(task_id)
+        .bind(&new_status)
+        .bind(new_position)
+        .fetch_optional(pool)
+        .await?;
+
+        match row {
+            Some(row) => Ok(Task {
+                id: row.get("id"),
+                title: row.get("title"),
+                description: row.get("description"),
+                project_id: row.get("project_id"),
+                created_by: row.get("created_by"),
+                assigned_to: row.get("assigned_to"),
+                status: row.get("status"),
+                priority: row.get("priority"),
+                due_date: row.get("due_date"),
+                tags: serde_json::from_value(row.get("tags")).unwrap_or(None),
+                position: row.get("position"),
+                created_at: row.get("created_at"),
+                updated_at: row.get("updated_at"),
+            }),
+            None => Err(AppError::NotFound("Task not found".to_string())),
+        }
+    }
+
+    pub async fn get_user_assigned_tasks(
+        pool: &PgPool,
+        user_id: Uuid,
+    ) -> Result<Vec<Task>, AppError> {
+        let rows = sqlx::query(
+            r#"
+            SELECT id, title, description, project_id, created_by, assigned_to, status, priority, due_date, tags, position, created_at, updated_at
+            FROM tasks 
+            WHERE assigned_to = $1 
+            ORDER BY due_date ASC NULLS LAST, priority DESC, created_at ASC
+            "#
+        )
+        .bind(user_id)
+        .fetch_all(pool)
+        .await?;
+
+        let tasks = rows.into_iter().map(|row| Task {
+            id: row.get("id"),
+            title: row.get("title"),
+            description: row.get("description"),
+            project_id: row.get("project_id"),
+            created_by: row.get("created_by"),
+            assigned_to: row.get("assigned_to"),
+            status: row.get("status"),
+            priority: row.get("priority"),
+            due_date: row.get("due_date"),
+            tags: serde_json::from_value(row.get("tags")).unwrap_or(None),
+            position: row.get("position"),
+            created_at: row.get("created_at"),
+            updated_at: row.get("updated_at"),
+        }).collect();
+
+        Ok(tasks)
+    }
+}
+
+pub struct BoardQueries;
+
+impl BoardQueries {
+    pub async fn create_board(
+        pool: &PgPool,
+        project_id: Uuid,
+        request: &CreateBoardRequest,
+        created_by: Uuid,
+    ) -> Result<Board, AppError> {
+        let columns = request.columns.clone()
+            .unwrap_or_else(|| vec!["Todo".to_string(), "In Progress".to_string(), "Review".to_string(), "Done".to_string()]);
+
+        let row = sqlx::query(
+            r#"
+            INSERT INTO boards (name, description, project_id, created_by, columns)
+            VALUES ($1, $2, $3, $4, $5)
+            RETURNING id, name, description, project_id, created_by, columns, is_default, created_at, updated_at
+            "#
+        )
+        .bind(&request.name)
+        .bind(&request.description)
+        .bind(project_id)
+        .bind(created_by)
+        .bind(serde_json::to_value(&columns).unwrap())
+        .fetch_one(pool)
+        .await?;
+
+        Ok(Board {
+            id: row.get("id"),
+            name: row.get("name"),
+            description: row.get("description"),
+            project_id: row.get("project_id"),
+            created_by: row.get("created_by"),
+            columns: serde_json::from_value(row.get("columns")).unwrap_or(vec![]),
+            is_default: row.get("is_default"),
+            created_at: row.get("created_at"),
+            updated_at: row.get("updated_at"),
+        })
+    }
+
+    pub async fn get_project_boards(
+        pool: &PgPool,
+        project_id: Uuid,
+    ) -> Result<Vec<Board>, AppError> {
+        let rows = sqlx::query(
+            r#"
+            SELECT id, name, description, project_id, created_by, columns, is_default, created_at, updated_at
+            FROM boards 
+            WHERE project_id = $1 
+            ORDER BY is_default DESC, created_at ASC
+            "#
+        )
+        .bind(project_id)
+        .fetch_all(pool)
+        .await?;
+
+        let boards = rows.into_iter().map(|row| Board {
+            id: row.get("id"),
+            name: row.get("name"),
+            description: row.get("description"),
+            project_id: row.get("project_id"),
+            created_by: row.get("created_by"),
+            columns: serde_json::from_value(row.get("columns")).unwrap_or(vec![]),
+            is_default: row.get("is_default"),
+            created_at: row.get("created_at"),
+            updated_at: row.get("updated_at"),
+        }).collect();
+
+        Ok(boards)
+    }
+
+    pub async fn get_board_by_id(
+        pool: &PgPool,
+        board_id: Uuid,
+    ) -> Result<Board, AppError> {
+        let row = sqlx::query(
+            r#"
+            SELECT id, name, description, project_id, created_by, columns, is_default, created_at, updated_at
+            FROM boards 
+            WHERE id = $1
+            "#
+        )
+        .bind(board_id)
+        .fetch_optional(pool)
+        .await?;
+
+        match row {
+            Some(row) => Ok(Board {
+                id: row.get("id"),
+                name: row.get("name"),
+                description: row.get("description"),
+                project_id: row.get("project_id"),
+                created_by: row.get("created_by"),
+                columns: serde_json::from_value(row.get("columns")).unwrap_or(vec![]),
+                is_default: row.get("is_default"),
+                created_at: row.get("created_at"),
+                updated_at: row.get("updated_at"),
+            }),
+            None => Err(AppError::NotFound("Board not found".to_string())),
+        }
+    }
+
+    pub async fn update_board(
+        pool: &PgPool,
+        board_id: Uuid,
+        request: &UpdateBoardRequest,
+    ) -> Result<Board, AppError> {
+        let row = sqlx::query(
+            r#"
+            UPDATE boards 
+            SET name = COALESCE($2, name),
+                description = COALESCE($3, description),
+                columns = COALESCE($4, columns)
+            WHERE id = $1
+            RETURNING id, name, description, project_id, created_by, columns, is_default, created_at, updated_at
+            "#
+        )
+        .bind(board_id)
+        .bind(&request.name)
+        .bind(&request.description)
+        .bind(request.columns.as_ref().map(|cols| serde_json::to_value(cols).unwrap()))
+        .fetch_optional(pool)
+        .await?;
+
+        match row {
+            Some(row) => Ok(Board {
+                id: row.get("id"),
+                name: row.get("name"),
+                description: row.get("description"),
+                project_id: row.get("project_id"),
+                created_by: row.get("created_by"),
+                columns: serde_json::from_value(row.get("columns")).unwrap_or(vec![]),
+                is_default: row.get("is_default"),
+                created_at: row.get("created_at"),
+                updated_at: row.get("updated_at"),
+            }),
+            None => Err(AppError::NotFound("Board not found".to_string())),
+        }
+    }
+
+    pub async fn delete_board(
+        pool: &PgPool,
+        board_id: Uuid,
+    ) -> Result<(), AppError> {
+        // Check if this is the default board
+        let is_default_row = sqlx::query(
+            "SELECT is_default FROM boards WHERE id = $1"
+        )
+        .bind(board_id)
+        .fetch_optional(pool)
+        .await?;
+
+        match is_default_row {
+            Some(row) => {
+                if row.get::<bool, _>("is_default") {
+                    return Err(AppError::Validation("Cannot delete the default board".to_string()));
+                }
+            }
+            None => return Err(AppError::NotFound("Board not found".to_string())),
+        }
+
+        let result = sqlx::query("DELETE FROM boards WHERE id = $1")
+            .bind(board_id)
+            .execute(pool)
+            .await?;
+
+        if result.rows_affected() == 0 {
+            return Err(AppError::NotFound("Board not found".to_string()));
+        }
+
+        Ok(())
+    }
+}
+
+pub struct TaskCommentQueries;
+
+impl TaskCommentQueries {
+    pub async fn create_comment(
+        pool: &PgPool,
+        task_id: Uuid,
+        user_id: Uuid,
+        request: &CreateTaskCommentRequest,
+    ) -> Result<TaskComment, AppError> {
+        let row = sqlx::query(
+            r#"
+            INSERT INTO task_comments (task_id, user_id, content)
+            VALUES ($1, $2, $3)
+            RETURNING id, task_id, user_id, content, created_at, updated_at
+            "#
+        )
+        .bind(task_id)
+        .bind(user_id)
+        .bind(&request.content)
+        .fetch_one(pool)
+        .await?;
+
+        Ok(TaskComment {
+            id: row.get("id"),
+            task_id: row.get("task_id"),
+            user_id: row.get("user_id"),
+            content: row.get("content"),
+            created_at: row.get("created_at"),
+            updated_at: row.get("updated_at"),
+        })
+    }
+
+    pub async fn get_task_comments(
+        pool: &PgPool,
+        task_id: Uuid,
+    ) -> Result<Vec<TaskComment>, AppError> {
+        let rows = sqlx::query(
+            r#"
+            SELECT id, task_id, user_id, content, created_at, updated_at
+            FROM task_comments 
+            WHERE task_id = $1 
+            ORDER BY created_at ASC
+            "#
+        )
+        .bind(task_id)
+        .fetch_all(pool)
+        .await?;
+
+        let comments = rows.into_iter().map(|row| TaskComment {
+            id: row.get("id"),
+            task_id: row.get("task_id"),
+            user_id: row.get("user_id"),
+            content: row.get("content"),
+            created_at: row.get("created_at"),
+            updated_at: row.get("updated_at"),
+        }).collect();
+
+        Ok(comments)
+    }
+
+    pub async fn delete_comment(
+        pool: &PgPool,
+        comment_id: Uuid,
+        user_id: Uuid,
+    ) -> Result<(), AppError> {
+        let result = sqlx::query(
+            "DELETE FROM task_comments WHERE id = $1 AND user_id = $2"
+        )
+        .bind(comment_id)
+        .bind(user_id)
+        .execute(pool)
+        .await?;
+
+        if result.rows_affected() == 0 {
+            return Err(AppError::NotFound("Comment not found or not authorized".to_string()));
+        }
+
+        Ok(())
     }
 }
