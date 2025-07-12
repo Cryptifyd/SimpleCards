@@ -9,11 +9,12 @@ use uuid::Uuid;
 
 use crate::auth::middleware::CurrentUser;
 use crate::database::{
-    models::{CreateTaskRequest, UpdateTaskRequest, Task, MoveTaskRequest, TaskStatus, TaskPriority},
-    queries::{TaskQueries, ProjectQueries}
+    models::{CreateTaskRequest, UpdateTaskRequest, Task, MoveTaskRequest, TaskStatus, TaskPriority, UserSummary},
+    queries::{TaskQueries, ProjectQueries, UserQueries}
 };
 use crate::utils::errors::AppError;
 use crate::utils::validation;
+use crate::websocket::events::{WebSocketEvent, TaskEventData, TaskMoveEventData};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct TaskFilters {
@@ -53,6 +54,18 @@ pub async fn create_task(
         &request,
         current_user.id(),
     ).await?;
+
+    // Broadcast task creation to WebSocket subscribers
+    let user = UserQueries::get_user_by_id(app_state.database.pool(), current_user.id()).await?;
+    let user_summary: UserSummary = user.into();
+    
+    let event = WebSocketEvent::TaskCreated(TaskEventData {
+        task: task.clone(),
+        project_id,
+        user: user_summary,
+    });
+    
+    app_state.websocket.broadcast_to_project(project_id, event, None).await;
 
     Ok((StatusCode::CREATED, Json(task)))
 }
@@ -143,6 +156,18 @@ pub async fn update_task(
 
     let updated_task = TaskQueries::update_task(app_state.database.pool(), task_id, &request).await?;
 
+    // Broadcast task update to WebSocket subscribers
+    let user = UserQueries::get_user_by_id(app_state.database.pool(), current_user.id()).await?;
+    let user_summary: UserSummary = user.into();
+    
+    let event = WebSocketEvent::TaskUpdated(TaskEventData {
+        task: updated_task.clone(),
+        project_id: task.project_id,
+        user: user_summary,
+    });
+    
+    app_state.websocket.broadcast_to_project(task.project_id, event, Some(current_user.id())).await;
+
     Ok(Json(updated_task))
 }
 
@@ -170,6 +195,14 @@ pub async fn delete_task(
 
     TaskQueries::delete_task(app_state.database.pool(), task_id).await?;
 
+    // Broadcast task deletion to WebSocket subscribers
+    let event = WebSocketEvent::TaskDeleted { 
+        task_id, 
+        project_id: task.project_id 
+    };
+    
+    app_state.websocket.broadcast_to_project(task.project_id, event, Some(current_user.id())).await;
+
     Ok(StatusCode::NO_CONTENT)
 }
 
@@ -193,12 +226,30 @@ pub async fn move_task(
         return Err(AppError::Forbidden("Need editor or admin role to move tasks".to_string()));
     }
 
+    let from_status = task.status.clone();
+    let to_status = request.status.clone();
+    
     let updated_task = TaskQueries::move_task(
         app_state.database.pool(),
         task_id,
         request.status,
         request.position,
     ).await?;
+
+    // Broadcast task move to WebSocket subscribers
+    let user = UserQueries::get_user_by_id(app_state.database.pool(), current_user.id()).await?;
+    let user_summary: UserSummary = user.into();
+    
+    let event = WebSocketEvent::TaskMoved(TaskMoveEventData {
+        task_id,
+        from_status,
+        to_status,
+        position: request.position,
+        project_id: task.project_id,
+        user: user_summary,
+    });
+    
+    app_state.websocket.broadcast_to_project(task.project_id, event, Some(current_user.id())).await;
 
     Ok(Json(updated_task))
 }

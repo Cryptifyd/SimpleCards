@@ -9,24 +9,28 @@ use std::fmt;
 #[derive(Debug)]
 pub enum AppError {
     Database(sqlx::Error),
+    DatabaseError(String),
     Validation(String),
     NotFound(String),
     Unauthorized(String),
     Forbidden(String),
     Conflict(String),
     InternalServer(String),
+    BadRequest(String),
 }
 
 impl fmt::Display for AppError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             AppError::Database(err) => write!(f, "Database error: {}", err),
+            AppError::DatabaseError(msg) => write!(f, "Database error: {}", msg),
             AppError::Validation(msg) => write!(f, "Validation error: {}", msg),
             AppError::NotFound(msg) => write!(f, "Not found: {}", msg),
             AppError::Unauthorized(msg) => write!(f, "Unauthorized: {}", msg),
             AppError::Forbidden(msg) => write!(f, "Forbidden: {}", msg),
             AppError::Conflict(msg) => write!(f, "Conflict: {}", msg),
             AppError::InternalServer(msg) => write!(f, "Internal server error: {}", msg),
+            AppError::BadRequest(msg) => write!(f, "Bad request: {}", msg),
         }
     }
 }
@@ -42,9 +46,22 @@ impl IntoResponse for AppError {
                     "An internal error occurred".to_string(),
                 )
             }
+            AppError::DatabaseError(msg) => {
+                tracing::error!("Database error: {}", msg);
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "DATABASE_ERROR",
+                    "An internal error occurred".to_string(),
+                )
+            }
             AppError::Validation(msg) => (
                 StatusCode::BAD_REQUEST,
                 "VALIDATION_ERROR",
+                msg,
+            ),
+            AppError::BadRequest(msg) => (
+                StatusCode::BAD_REQUEST,
+                "BAD_REQUEST",
                 msg,
             ),
             AppError::NotFound(msg) => (
