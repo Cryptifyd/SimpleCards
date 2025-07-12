@@ -135,3 +135,108 @@ impl From<User> for UserSummary {
         }
     }
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::Type, PartialEq)]
+#[sqlx(type_name = "task_status", rename_all = "lowercase")]
+pub enum TaskStatus {
+    Todo,
+    InProgress,
+    Review,
+    Done,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::Type, PartialEq)]
+#[sqlx(type_name = "task_priority", rename_all = "lowercase")]
+pub enum TaskPriority {
+    Low,
+    Medium,
+    High,
+    Critical,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
+pub struct Task {
+    pub id: Uuid,
+    pub title: String,
+    pub description: Option<String>,
+    pub project_id: Uuid,
+    pub created_by: Uuid,
+    pub assigned_to: Option<Uuid>,
+    pub status: TaskStatus,
+    pub priority: TaskPriority,
+    pub due_date: Option<DateTime<Utc>>,
+    pub tags: Option<Vec<String>>,
+    pub position: i32,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct CreateTaskRequest {
+    pub title: String,
+    pub description: Option<String>,
+    pub assigned_to: Option<Uuid>,
+    pub priority: Option<TaskPriority>,
+    pub due_date: Option<DateTime<Utc>>,
+    pub tags: Option<Vec<String>>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct UpdateTaskRequest {
+    pub title: Option<String>,
+    pub description: Option<String>,
+    pub assigned_to: Option<Uuid>,
+    pub status: Option<TaskStatus>,
+    pub priority: Option<TaskPriority>,
+    pub due_date: Option<DateTime<Utc>>,
+    pub tags: Option<Vec<String>>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
+pub struct Board {
+    pub id: Uuid,
+    pub name: String,
+    pub description: Option<String>,
+    pub project_id: Uuid,
+    pub created_by: Uuid,
+    pub columns: Vec<String>, // JSON array of column names
+    pub is_default: bool,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct CreateBoardRequest {
+    pub name: String,
+    pub description: Option<String>,
+    pub columns: Option<Vec<String>>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct UpdateBoardRequest {
+    pub name: Option<String>,
+    pub description: Option<String>,
+    pub columns: Option<Vec<String>>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct MoveTaskRequest {
+    pub task_id: Uuid,
+    pub status: TaskStatus,
+    pub position: i32,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
+pub struct TaskComment {
+    pub id: Uuid,
+    pub task_id: Uuid,
+    pub user_id: Uuid,
+    pub content: String,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct CreateTaskCommentRequest {
+    pub content: String,
+}

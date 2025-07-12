@@ -160,6 +160,66 @@ pub fn validate_project_description(description: &str) -> Result<(), AppError> {
     Ok(())
 }
 
+pub fn validate_task_title(title: &str) -> Result<(), AppError> {
+    if title.is_empty() {
+        return Err(AppError::Validation("Task title is required".to_string()));
+    }
+
+    if title.len() < 2 {
+        return Err(AppError::Validation("Task title must be at least 2 characters".to_string()));
+    }
+
+    if title.len() > 255 {
+        return Err(AppError::Validation("Task title must be 255 characters or less".to_string()));
+    }
+
+    Ok(())
+}
+
+pub fn validate_task_description(description: &str) -> Result<(), AppError> {
+    if description.len() > 2000 {
+        return Err(AppError::Validation("Task description must be 2000 characters or less".to_string()));
+    }
+
+    Ok(())
+}
+
+pub fn validate_board_name(name: &str) -> Result<(), AppError> {
+    if name.is_empty() {
+        return Err(AppError::Validation("Board name is required".to_string()));
+    }
+
+    if name.len() < 2 {
+        return Err(AppError::Validation("Board name must be at least 2 characters".to_string()));
+    }
+
+    if name.len() > 100 {
+        return Err(AppError::Validation("Board name must be 100 characters or less".to_string()));
+    }
+
+    Ok(())
+}
+
+pub fn validate_board_description(description: &str) -> Result<(), AppError> {
+    if description.len() > 500 {
+        return Err(AppError::Validation("Board description must be 500 characters or less".to_string()));
+    }
+
+    Ok(())
+}
+
+pub fn validate_task_comment(content: &str) -> Result<(), AppError> {
+    if content.is_empty() {
+        return Err(AppError::Validation("Comment content is required".to_string()));
+    }
+
+    if content.len() > 1000 {
+        return Err(AppError::Validation("Comment must be 1000 characters or less".to_string()));
+    }
+
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
