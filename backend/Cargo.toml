@@ -1,0 +1,48 @@
+[package]
+name = "simplecards"
+version = "0.1.0"
+edition = "2021"
+authors = ["Your Name <your.email@example.com>"]
+description = "SimpleCards task management backend API"
+license = "MIT"
+
+[dependencies]
+# Web framework
+axum = "0.7"
+tokio = { version = "1.0", features = ["full"] }
+tower = "0.4"
+tower-http = { version = "0.5", features = ["cors", "fs", "trace"] }
+
+# Database
+sqlx = { version = "0.7", features = ["runtime-tokio-rustls", "postgres", "uuid", "chrono", "json"] }
+
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+# Authentication
+jsonwebtoken = "9.0"
+argon2 = "0.5"
+
+# Utils
+uuid = { version = "1.0", features = ["v4", "serde"] }
+chrono = { version = "0.4", features = ["serde"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+anyhow = "1.0"
+thiserror = "1.0"
+
+# Environment
+dotenvy = "0.15"
+
+# Redis
+redis = { version = "0.24", features = ["tokio-comp"] }
+
+# WebSocket
+tokio-tungstenite = "0.21"
+
+# HTTP client (for testing)
+reqwest = { version = "0.11", features = ["json"], optional = true }
+
+[dev-dependencies]
+reqwest = { version = "0.11", features = ["json"] }
