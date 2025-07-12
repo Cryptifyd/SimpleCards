@@ -14,6 +14,7 @@ use crate::database::{
 };
 use crate::utils::errors::AppError;
 use crate::utils::validation;
+use crate::websocket::events::{WebSocketEvent, CommentEventData};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct TaskCommentResponse {
@@ -47,6 +48,19 @@ pub async fn create_task_comment(
         current_user.id(),
         &request,
     ).await?;
+
+    // Broadcast comment creation to WebSocket subscribers
+    let user = UserQueries::get_user_by_id(app_state.database.pool(), current_user.id()).await?;
+    let user_summary: UserSummary = user.into();
+    
+    let event = WebSocketEvent::CommentCreated(CommentEventData {
+        comment: comment.clone(),
+        task_id,
+        project_id: task.project_id,
+        user: user_summary,
+    });
+    
+    app_state.websocket.broadcast_to_project(task.project_id, event, Some(current_user.id())).await;
 
     Ok((StatusCode::CREATED, Json(comment)))
 }
@@ -87,12 +101,25 @@ pub async fn delete_task_comment(
     Extension(current_user): Extension<CurrentUser>,
     Path(comment_id): Path<Uuid>,
 ) -> Result<impl IntoResponse, AppError> {
-    // The delete_comment function already checks if the user owns the comment
+    // Get comment details before deletion for broadcasting
+    let comment = TaskCommentQueries::get_comment_by_id(app_state.database.pool(), comment_id).await?;
+    let task = TaskQueries::get_task_by_id(app_state.database.pool(), comment.task_id).await?;
+    
+    // The delete_comment function checks if the user owns the comment
     TaskCommentQueries::delete_comment(
         app_state.database.pool(),
         comment_id,
         current_user.id(),
     ).await?;
+
+    // Broadcast comment deletion to WebSocket subscribers
+    let event = WebSocketEvent::CommentDeleted { 
+        comment_id, 
+        task_id: comment.task_id,
+        project_id: task.project_id,
+    };
+    
+    app_state.websocket.broadcast_to_project(task.project_id, event, Some(current_user.id())).await;
 
     Ok(StatusCode::NO_CONTENT)
 }

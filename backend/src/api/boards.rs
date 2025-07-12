@@ -9,11 +9,12 @@ use uuid::Uuid;
 
 use crate::auth::middleware::CurrentUser;
 use crate::database::{
-    models::{CreateBoardRequest, UpdateBoardRequest, Board, TaskStatus},
-    queries::{BoardQueries, ProjectQueries, TaskQueries}
+    models::{CreateBoardRequest, UpdateBoardRequest, Board, TaskStatus, UserSummary},
+    queries::{BoardQueries, ProjectQueries, TaskQueries, UserQueries}
 };
 use crate::utils::errors::AppError;
 use crate::utils::validation;
+use crate::websocket::events::{WebSocketEvent, BoardEventData};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct BoardWithTasks {
@@ -52,6 +53,18 @@ pub async fn create_board(
         &request,
         current_user.id(),
     ).await?;
+
+    // Broadcast board creation to WebSocket subscribers
+    let user = UserQueries::get_user_by_id(app_state.database.pool(), current_user.id()).await?;
+    let user_summary: UserSummary = user.into();
+    
+    let event = WebSocketEvent::BoardCreated(BoardEventData {
+        board: board.clone(),
+        project_id,
+        user: user_summary,
+    });
+    
+    app_state.websocket.broadcast_to_project(project_id, event, Some(current_user.id())).await;
 
     Ok((StatusCode::CREATED, Json(board)))
 }
@@ -124,6 +137,18 @@ pub async fn update_board(
 
     let updated_board = BoardQueries::update_board(app_state.database.pool(), board_id, &request).await?;
 
+    // Broadcast board update to WebSocket subscribers
+    let user = UserQueries::get_user_by_id(app_state.database.pool(), current_user.id()).await?;
+    let user_summary: UserSummary = user.into();
+    
+    let event = WebSocketEvent::BoardUpdated(BoardEventData {
+        board: updated_board.clone(),
+        project_id: board.project_id,
+        user: user_summary,
+    });
+    
+    app_state.websocket.broadcast_to_project(board.project_id, event, Some(current_user.id())).await;
+
     Ok(Json(updated_board))
 }
 
@@ -147,6 +172,14 @@ pub async fn delete_board(
     }
 
     BoardQueries::delete_board(app_state.database.pool(), board_id).await?;
+
+    // Broadcast board deletion to WebSocket subscribers
+    let event = WebSocketEvent::BoardDeleted { 
+        board_id, 
+        project_id: board.project_id 
+    };
+    
+    app_state.websocket.broadcast_to_project(board.project_id, event, Some(current_user.id())).await;
 
     Ok(StatusCode::NO_CONTENT)
 }

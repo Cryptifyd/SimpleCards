@@ -18,11 +18,13 @@ mod websocket;
 
 use auth::jwt::JwtService;
 use database::connection::Database;
+use websocket::handler::{WebSocketState, websocket_handler};
 
 #[derive(Clone)]
 pub struct AppState {
     pub database: Database,
     pub jwt_service: JwtService,
+    pub websocket: WebSocketState,
 }
 
 #[derive(Serialize)]
@@ -75,10 +77,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let jwt_service = JwtService::new()?;
     info!("JWT service initialized");
 
+    // Initialize WebSocket state
+    let ws_state = WebSocketState::new(jwt_service.clone(), database.clone());
+    info!("WebSocket service initialized");
+
     // Create app state
     let app_state = AppState {
         database,
         jwt_service: jwt_service.clone(),
+        websocket: ws_state.clone(),
     };
 
     // Build protected routes (require authentication)
@@ -146,11 +153,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/auth/refresh", post(api::auth::refresh_token))
         .route("/auth/logout", post(api::auth::logout));
 
+    // WebSocket routes
+    let ws_routes = Router::new()
+        .route("/ws", get(websocket_handler))
+        .with_state(ws_state);
+
     // Combine routes
     let app = Router::new()
         .nest("/api", protected_routes)
         .merge(public_routes.clone())
         .nest("/api", public_routes)
+        .merge(ws_routes)
         .with_state(app_state)
         .layer(CorsLayer::permissive());
 
@@ -159,6 +172,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     info!("SimpleCards backend starting on http://{}:{}", host, port);
     info!("Health check available at http://{}:{}/health", host, port);
     info!("API documentation: http://{}:{}/api", host, port);
+    info!("WebSocket endpoint available at ws://{}:{}/ws", host, port);
 
     // Run the server
     let listener = tokio::net::TcpListener::bind(&addr).await?;

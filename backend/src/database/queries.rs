@@ -1293,6 +1293,35 @@ impl TaskCommentQueries {
         Ok(comments)
     }
 
+    pub async fn get_comment_by_id(
+        pool: &PgPool,
+        comment_id: Uuid,
+    ) -> Result<TaskComment, AppError> {
+        let row = sqlx::query(
+            r#"
+            SELECT id, task_id, user_id, content, created_at, updated_at
+            FROM task_comments 
+            WHERE id = $1
+            "#
+        )
+        .bind(comment_id)
+        .fetch_one(pool)
+        .await
+        .map_err(|e| match e {
+            sqlx::Error::RowNotFound => AppError::NotFound("Comment not found".to_string()),
+            _ => AppError::DatabaseError(e.to_string()),
+        })?;
+
+        Ok(TaskComment {
+            id: row.get("id"),
+            task_id: row.get("task_id"),
+            user_id: row.get("user_id"),
+            content: row.get("content"),
+            created_at: row.get("created_at"),
+            updated_at: row.get("updated_at"),
+        })
+    }
+
     pub async fn delete_comment(
         pool: &PgPool,
         comment_id: Uuid,
