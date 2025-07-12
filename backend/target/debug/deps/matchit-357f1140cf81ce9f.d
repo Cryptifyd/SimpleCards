@@ -1,0 +1,11 @@
+/Users/cryptifyd/projects/cards/backend/target/debug/deps/matchit-357f1140cf81ce9f.d: /Users/cryptifyd/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/matchit-0.7.3/src/lib.rs /Users/cryptifyd/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/matchit-0.7.3/src/error.rs /Users/cryptifyd/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/matchit-0.7.3/src/params.rs /Users/cryptifyd/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/matchit-0.7.3/src/router.rs /Users/cryptifyd/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/matchit-0.7.3/src/tree.rs
+
+/Users/cryptifyd/projects/cards/backend/target/debug/deps/libmatchit-357f1140cf81ce9f.rlib: /Users/cryptifyd/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/matchit-0.7.3/src/lib.rs /Users/cryptifyd/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/matchit-0.7.3/src/error.rs /Users/cryptifyd/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/matchit-0.7.3/src/params.rs /Users/cryptifyd/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/matchit-0.7.3/src/router.rs /Users/cryptifyd/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/matchit-0.7.3/src/tree.rs
+
+/Users/cryptifyd/projects/cards/backend/target/debug/deps/libmatchit-357f1140cf81ce9f.rmeta: /Users/cryptifyd/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/matchit-0.7.3/src/lib.rs /Users/cryptifyd/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/matchit-0.7.3/src/error.rs /Users/cryptifyd/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/matchit-0.7.3/src/params.rs /Users/cryptifyd/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/matchit-0.7.3/src/router.rs /Users/cryptifyd/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/matchit-0.7.3/src/tree.rs
+
+/Users/cryptifyd/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/matchit-0.7.3/src/lib.rs:
+/Users/cryptifyd/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/matchit-0.7.3/src/error.rs:
+/Users/cryptifyd/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/matchit-0.7.3/src/params.rs:
+/Users/cryptifyd/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/matchit-0.7.3/src/router.rs:
+/Users/cryptifyd/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/matchit-0.7.3/src/tree.rs:

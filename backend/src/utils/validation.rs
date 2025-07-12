@@ -112,6 +112,54 @@ pub fn validate_hex_color(color: &str) -> Result<(), AppError> {
     Ok(())
 }
 
+pub fn validate_team_name(name: &str) -> Result<(), AppError> {
+    if name.is_empty() {
+        return Err(AppError::Validation("Team name is required".to_string()));
+    }
+
+    if name.len() < 2 {
+        return Err(AppError::Validation("Team name must be at least 2 characters".to_string()));
+    }
+
+    if name.len() > 100 {
+        return Err(AppError::Validation("Team name must be 100 characters or less".to_string()));
+    }
+
+    Ok(())
+}
+
+pub fn validate_team_description(description: &str) -> Result<(), AppError> {
+    if description.len() > 500 {
+        return Err(AppError::Validation("Team description must be 500 characters or less".to_string()));
+    }
+
+    Ok(())
+}
+
+pub fn validate_project_name(name: &str) -> Result<(), AppError> {
+    if name.is_empty() {
+        return Err(AppError::Validation("Project name is required".to_string()));
+    }
+
+    if name.len() < 2 {
+        return Err(AppError::Validation("Project name must be at least 2 characters".to_string()));
+    }
+
+    if name.len() > 100 {
+        return Err(AppError::Validation("Project name must be 100 characters or less".to_string()));
+    }
+
+    Ok(())
+}
+
+pub fn validate_project_description(description: &str) -> Result<(), AppError> {
+    if description.len() > 1000 {
+        return Err(AppError::Validation("Project description must be 1000 characters or less".to_string()));
+    }
+
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
